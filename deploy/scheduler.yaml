@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: maint-scheduler
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: maint-scheduler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:kube-scheduler
+subjects:
+- kind: ServiceAccount
+  name: maint-scheduler
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: maint-scheduler-volume
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:volume-scheduler
+subjects:
+- kind: ServiceAccount
+  name: maint-scheduler
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: maint-scheduler
+  namespace: kube-system
+data:
+  config.yaml: |
+    apiVersion: kubescheduler.config.k8s.io/v1
+    kind: KubeSchedulerConfiguration
+    leaderElection:
+      leaderElect: false
+    profiles:
+    - schedulerName: maint-scheduler
+      plugins:
+        preFilter:
+          enabled:
+          - name: Maint
+        filter:
+          enabled:
+          - name: Maint
+        score:
+          disabled:
+          - name: "*"
+          enabled:
+          - name: Maint
+            weight: 1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: maint-scheduler
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: maint-scheduler
+  template:
+    metadata:
+      labels:
+        app: maint-scheduler
+    spec:
+      serviceAccountName: maint-scheduler
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: scheduler
+        image: maint-scheduler:kind
+        imagePullPolicy: Never
+        args:
+        - --config=/etc/scheduler/config.yaml
+        - --secure-port=0
+        - --v=6
+        - --vmodule=schedule_one=10
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        volumeMounts:
+        - name: config
+          mountPath: /etc/scheduler
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: maint-scheduler
