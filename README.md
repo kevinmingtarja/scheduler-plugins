@@ -8,6 +8,8 @@ The first example is `Maint`, a maintenance-aware placement plugin.
 
 ### Maint: maintenance-aware placement
 
+Inspired by [Slurm's maintenance reservations](https://slurm.schedmd.com/reservations.html#maint).
+
 `Maint` rejects nodes with maintenance starting in 30 minutes or less. Among
 eligible nodes, it scores time remaining linearly from 0 at 30 minutes to 100
 at six hours. Nodes without a maintenance annotation receive 100.
